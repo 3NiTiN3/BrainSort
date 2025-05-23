@@ -2,20 +2,81 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --primary: 251 91.3% 54.9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 217 91.2% 59.8%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 350 89.1% 60.2%;
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --ring: 251 91.3% 54.9%;
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  .task-card {
+    @apply bg-gray-900 border border-gray-800 rounded-lg p-4 cursor-pointer 
+           transition-all duration-200 hover:border-primary hover:shadow-lg
+           hover:transform hover:-translate-y-1;
+  }
+
+  .column {
+    @apply bg-gray-900/50 rounded-xl p-4 border border-gray-800;
+  }
+}
+
+/* Calendar Dark Theme */
+.calendar-dark {
+  @apply text-white;
+}
+
+.calendar-dark .rbc-calendar {
+  @apply bg-gray-900;
+}
+
+.calendar-dark .rbc-header {
+  @apply bg-gray-800 border-gray-700 py-3;
+}
+
+.calendar-dark .rbc-today {
+  @apply bg-gray-800;
+}
+
+.calendar-dark .rbc-off-range-bg {
+  @apply bg-gray-950;
+}
+
+.calendar-dark .rbc-date-cell {
+  @apply text-gray-300;
+}
+
+.calendar-dark .rbc-toolbar {
+  @apply mb-4;
+}
+
+.calendar-dark .rbc-toolbar button {
+  @apply text-white bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded;
+}
+
+.calendar-dark .rbc-toolbar button.rbc-active {
+  @apply bg-primary;
+}
+
+.calendar-dark .rbc-month-view,
+.calendar-dark .rbc-time-view {
+  @apply border-gray-700;
+}
+
+.calendar-dark .rbc-day-bg + .rbc-day-bg {
+  @apply border-l border-gray-700;
+}
+
+.calendar-dark .rbc-month-row + .rbc-month-row {
+  @apply border-t border-gray-700;
 }
