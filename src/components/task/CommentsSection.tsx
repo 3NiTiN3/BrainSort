@@ -107,11 +107,10 @@ export function CommentsSection({
                       placeholder="Edit comment..."
                     />
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={handleSaveEdit}>
+                      <Button onClick={handleSaveEdit}>
                         Save
                       </Button>
                       <Button
-                        size="sm"
                         variant="secondary"
                         onClick={() => setEditingId(null)}
                       >

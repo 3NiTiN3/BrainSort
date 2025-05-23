@@ -10,6 +10,7 @@ let tasks: Task[] = [
     priority: 'high',
     labels: ['Backend', 'Security'],
     assignee: { id: '1', name: 'John Doe', email: 'john@example.com' },
+    createdBy: '2',
     createdAt: new Date(),
     updatedAt: new Date(),
   },

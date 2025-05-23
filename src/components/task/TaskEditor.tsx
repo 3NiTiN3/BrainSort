@@ -38,7 +38,9 @@ export function TaskEditor({ content, onChange, placeholder }: TaskEditorProps) 
             return {
               onStart: () => {},
               onUpdate: () => {},
-              onKeyDown: () => {},
+              onKeyDown: () => {
+                return false
+              },
               onExit: () => {},
             }
           },

@@ -38,6 +38,7 @@ export function CreateTaskModal({ isOpen, onClose }: CreateTaskModalProps) {
       storyPoints: formData.storyPoints ? parseInt(formData.storyPoints) : undefined,
       createdAt: new Date(),
       updatedAt: new Date(),
+      createdBy: 'system', // Replace with actual user if available
     }
 
     addTask(newTask)

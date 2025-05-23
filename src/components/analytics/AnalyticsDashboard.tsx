@@ -1,3 +1,4 @@
+// path: src/components/analytics/AnalyticsDashboard.tsx
 'use client'
 
 import { useMemo } from 'react'
@@ -20,11 +21,12 @@ import { useTasks } from '@/hooks/useTaskStore'
 import { format, subDays, eachDayOfInterval } from 'date-fns'
 
 export function AnalyticsDashboard() {
-  const tasks = useTasks() || [] // Add default empty array
+  const tasks = useTasks() || []
 
-  // Task status distribution
+  const tasksMemo = useMemo(() => tasks, [tasks])
+
   const statusData = useMemo(() => {
-    const counts = tasks.reduce((acc, task) => {
+    const counts = tasksMemo.reduce((acc, task) => {
       acc[task.status] = (acc[task.status] || 0) + 1
       return acc
     }, {} as Record<string, number>)
@@ -33,11 +35,10 @@ export function AnalyticsDashboard() {
       name: status,
       value: count,
     }))
-  }, [tasks])
+  }, [tasksMemo])
 
-  // Priority distribution
   const priorityData = useMemo(() => {
-    const counts = tasks.reduce((acc, task) => {
+    const counts = tasksMemo.reduce((acc, task) => {
       acc[task.priority] = (acc[task.priority] || 0) + 1
       return acc
     }, {} as Record<string, number>)
@@ -46,9 +47,8 @@ export function AnalyticsDashboard() {
       name: priority,
       value: count,
     }))
-  }, [tasks])
+  }, [tasksMemo])
 
-  // Tasks created over time (last 30 days)
   const timelineData = useMemo(() => {
     const thirtyDaysAgo = subDays(new Date(), 30)
     const dateRange = eachDayOfInterval({
@@ -58,10 +58,10 @@ export function AnalyticsDashboard() {
 
     return dateRange.map(date => {
       const dateStr = format(date, 'yyyy-MM-dd')
-      const created = tasks.filter(task => 
+      const created = tasksMemo.filter(task => 
         format(new Date(task.createdAt), 'yyyy-MM-dd') === dateStr
       ).length
-      const completed = tasks.filter(task => 
+      const completed = tasksMemo.filter(task => 
         task.completedDate && format(new Date(task.completedDate), 'yyyy-MM-dd') === dateStr
       ).length
 
@@ -71,7 +71,7 @@ export function AnalyticsDashboard() {
         completed,
       }
     })
-  }, [tasks])
+  }, [tasksMemo])
 
   const COLORS = {
     todo: '#9CA3AF',
@@ -122,9 +122,7 @@ export function AnalyticsDashboard() {
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis dataKey="name" stroke="#9CA3AF" />
               <YAxis stroke="#9CA3AF" />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151' }}
-              />
+              <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151' }} />
               <Bar dataKey="value" fill="#8884d8">
                 {priorityData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[entry.name as keyof typeof COLORS]} />
@@ -142,24 +140,10 @@ export function AnalyticsDashboard() {
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis dataKey="date" stroke="#9CA3AF" />
               <YAxis stroke="#9CA3AF" />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151' }}
-              />
+              <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151' }} />
               <Legend />
-              <Line
-                type="monotone"
-                dataKey="created"
-                stroke="#3B82F6"
-                name="Created"
-                strokeWidth={2}
-              />
-              <Line
-                type="monotone"
-                dataKey="completed"
-                stroke="#10B981"
-                name="Completed"
-                strokeWidth={2}
-              />
+              <Line type="monotone" dataKey="created" stroke="#3B82F6" name="Created" strokeWidth={2} />
+              <Line type="monotone" dataKey="completed" stroke="#10B981" name="Completed" strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>
         </div>

@@ -1,3 +1,4 @@
+// path: src/components/task/AttachmentsSection.tsx
 'use client'
 
 import { useCallback } from 'react'
@@ -23,7 +24,7 @@ export function AttachmentsSection({
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    maxSize: 10485760, // 10MB
+    maxSize: 10485760,
   })
 
   const getFileIcon = (type: string) => {
@@ -56,7 +57,6 @@ export function AttachmentsSection({
         Attachments ({attachments.length})
       </h3>
 
-      {/* Upload Area */}
       <div
         {...getRootProps()}
         className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
@@ -68,33 +68,24 @@ export function AttachmentsSection({
         <input {...getInputProps()} />
         <Upload className="mx-auto mb-2 text-gray-400" size={24} />
         <p className="text-gray-400">
-          {isDragActive
-            ? 'Drop files here...'
-            : 'Drag & drop files here, or click to select'}
+          {isDragActive ? 'Drop files here...' : 'Drag & drop files here, or click to select'}
         </p>
         <p className="text-xs text-gray-500 mt-1">Maximum file size: 10MB</p>
       </div>
 
-      {/* Attachments Grid */}
       {attachments.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {attachments.map((attachment) => (
-            <div
-              key={attachment.id}
-              className="bg-gray-800 rounded-lg overflow-hidden group relative"
-            >
+            <div key={attachment.id} className="bg-gray-800 rounded-lg overflow-hidden group relative">
               {getFilePreview(attachment)}
-              
+
               <div className="p-3">
                 <p className="text-sm text-white truncate">{attachment.name}</p>
-                <p className="text-xs text-gray-400">
-                  {formatBytes(attachment.size)}
-                </p>
+                <p className="text-xs text-gray-400">{formatBytes(attachment.size)}</p>
               </div>
 
-              {/* Actions */}
               <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                
+                <a
                   href={attachment.url}
                   download={attachment.name}
                   className="p-1 bg-gray-900/80 rounded hover:bg-gray-900"
