@@ -1,206 +1,456 @@
-'use client';
+'use client'
 
-import { useState, useEffect } from 'react';
-import { Plus, Calendar, Users, Target } from 'lucide-react';
-import cn from 'classnames';
-import { useTaskStore } from '@/hooks/useTaskStore';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/Button';
-import { format, addDays } from 'date-fns';
+import { useState, useEffect } from 'react'
+import { Plus, Calendar, Users, Target, Play, CheckCircle, Clock, TrendingUp } from 'lucide-react'
+import { useTaskStore } from '@/hooks/useTaskStore'
+import { useAuth } from '@/contexts/AuthContext'
+import { useWorkspace } from '@/contexts/WorkspaceContext'
+import { Button } from '@/components/ui/Button'
+import { format, differenceInDays, startOfDay, endOfDay } from 'date-fns'
+import { cn } from '@/lib/utils'
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 interface Sprint {
-  id: string;
-  name: string;
-  goal: string;
-  startDate: Date;
-  endDate: Date;
-  status: 'planning' | 'active' | 'completed';
-  tasks: string[]; // list of task IDs
+  id: string
+  name: string
+  goal: string
+  startDate: Date
+  endDate: Date
+  status: 'planning' | 'active' | 'completed'
+  tasks: string[]
 }
 
 export default function SprintsPage() {
-  const { user } = useAuth();
-  const { tasks, fetchTasks } = useTaskStore();
-
-  // initial sprint definition without tasks
+  const { user } = useAuth()
+  const { currentWorkspace } = useWorkspace()
+  const { tasks, fetchTasks } = useTaskStore()
+  const [selectedSprint, setSelectedSprint] = useState<Sprint | null>(null)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  
+  // Mock sprints data - replace with Supabase
   const [sprints, setSprints] = useState<Sprint[]>([
     {
       id: 'sprint-1',
-      name: 'Sprint 1',
-      goal: 'Complete authentication and core UI',
-      startDate: new Date(),
-      endDate: addDays(new Date(), 14),
+      name: 'Sprint 23',
+      goal: 'Complete user authentication and core dashboard',
+      startDate: new Date('2025-01-15'),
+      endDate: new Date('2025-01-29'),
       status: 'active',
-      tasks: [], 
+      tasks: tasks.filter(t => t.status !== 'todo').map(t => t.id)
     },
-  ]);
-
-  // fetch tasks once the user is available
-  useEffect(() => {
-    if (user) {
-      fetchTasks();
+    {
+      id: 'sprint-2',
+      name: 'Sprint 24',
+      goal: 'Implement collaboration features',
+      startDate: new Date('2025-01-29'),
+      endDate: new Date('2025-02-12'),
+      status: 'planning',
+      tasks: []
     }
-  }, [user, fetchTasks]);
+  ])
 
-  // whenever `tasks` change, update each sprint's task list
   useEffect(() => {
-    if (tasks.length && sprints.length) {
-      setSprints((prev) =>
-        prev.map((s) => ({
-          ...s,
-          // example: for sprint-1, include all non-todo tasks
-          tasks:
-            s.id === 'sprint-1'
-              ? tasks.filter((t) => t.status !== 'todo').map((t) => t.id)
-              : s.tasks,
-        }))
-      );
+    if (user && currentWorkspace) {
+      fetchTasks()
     }
-  }, [tasks, sprints.length]);
+  }, [user, currentWorkspace])
 
-  const getSprintTasks = (sprint: Sprint) =>
-    tasks.filter((task) => sprint.tasks.includes(task.id));
+  const activeSprint = sprints.find(s => s.status === 'active')
+  const planningSprints = sprints.filter(s => s.status === 'planning')
+  const completedSprints = sprints.filter(s => s.status === 'completed')
 
-  const getSprintProgress = (sprint: Sprint) => {
-    const sprintTasks = getSprintTasks(sprint);
-    if (!sprintTasks.length) return 0;
-    const doneCount = sprintTasks.filter((t) => t.status === 'done').length;
-    return Math.round((doneCount / sprintTasks.length) * 100);
-  };
+  const getSprintMetrics = (sprint: Sprint) => {
+    const sprintTasks = tasks.filter(task => sprint.tasks.includes(task.id))
+    const completed = sprintTasks.filter(t => t.status === 'done').length
+    const inProgress = sprintTasks.filter(t => t.status === 'inProgress').length
+    const totalPoints = sprintTasks.reduce((sum, t) => sum + (t.storyPoints || 0), 0)
+    const completedPoints = sprintTasks
+      .filter(t => t.status === 'done')
+      .reduce((sum, t) => sum + (t.storyPoints || 0), 0)
+    
+    const totalDays = differenceInDays(sprint.endDate, sprint.startDate)
+    const daysElapsed = differenceInDays(new Date(), sprint.startDate)
+    const daysRemaining = differenceInDays(sprint.endDate, new Date())
+    
+    return {
+      totalTasks: sprintTasks.length,
+      completed,
+      inProgress,
+      totalPoints,
+      completedPoints,
+      velocity: completedPoints,
+      progress: sprintTasks.length > 0 ? Math.round((completed / sprintTasks.length) * 100) : 0,
+      totalDays,
+      daysElapsed: Math.max(0, daysElapsed),
+      daysRemaining: Math.max(0, daysRemaining),
+      burndownData: generateBurndownData(sprint, sprintTasks)
+    }
+  }
 
-  const getSprintVelocity = (sprint: Sprint) =>
-    getSprintTasks(sprint)
-      .filter((t) => t.status === 'done')
-      .reduce((sum, t) => sum + (t.storyPoints ?? 0), 0);
+  const generateBurndownData = (sprint: Sprint, sprintTasks: any[]) => {
+    const totalPoints = sprintTasks.reduce((sum, t) => sum + (t.storyPoints || 0), 0)
+    const days = differenceInDays(sprint.endDate, sprint.startDate)
+    const idealBurnRate = totalPoints / days
+    
+    const data = []
+    for (let i = 0; i <= days; i++) {
+      data.push({
+        day: i,
+        ideal: Math.max(0, totalPoints - (idealBurnRate * i)),
+        actual: totalPoints - (Math.random() * idealBurnRate * i) // Replace with actual data
+      })
+    }
+    return data
+  }
 
   return (
-    <div className="flex flex-col h-full p-6">
+    <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Sprints</h1>
-<p className="text-gray-400">Plan and track your team&apos;s sprints</p>
+      <div className="bg-gray-900 border-b border-gray-800 p-4 lg:p-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-bold text-white">Sprints</h1>
+            <p className="text-gray-400 text-sm lg:text-base">
+              Manage your team's iterations
+            </p>
+          </div>
+          
+          <Button onClick={() => setShowCreateModal(true)} size="sm">
+            <Plus size={16} />
+            <span className="hidden sm:inline">Create Sprint</span>
+          </Button>
+        </div>
       </div>
 
-      {/* Create button */}
-      <div className="mb-6">
-        <Button>
-          <Plus size={16} />
-          Create Sprint
-        </Button>
+      <div className="flex-1 overflow-auto p-4 pb-20 lg:pb-4">
+        {/* Active Sprint */}
+        {activeSprint && (
+          <div className="mb-8">
+            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <Play className="text-green-400" size={20} />
+              Active Sprint
+            </h2>
+            <SprintCard
+              sprint={activeSprint}
+              metrics={getSprintMetrics(activeSprint)}
+              isActive={true}
+              onSelect={() => setSelectedSprint(activeSprint)}
+            />
+          </div>
+        )}
+
+        {/* Planning Sprints */}
+        {planningSprints.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <Clock className="text-yellow-400" size={20} />
+              Planning
+            </h2>
+            <div className="space-y-4">
+              {planningSprints.map(sprint => (
+                <SprintCard
+                  key={sprint.id}
+                  sprint={sprint}
+                  metrics={getSprintMetrics(sprint)}
+                  onSelect={() => setSelectedSprint(sprint)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Completed Sprints */}
+        {completedSprints.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <CheckCircle className="text-gray-400" size={20} />
+              Completed
+            </h2>
+            <div className="space-y-4">
+              {completedSprints.map(sprint => (
+                <SprintCard
+                  key={sprint.id}
+                  sprint={sprint}
+                  metrics={getSprintMetrics(sprint)}
+                  isCompleted={true}
+                  onSelect={() => setSelectedSprint(sprint)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Sprint cards */}
-      <div className="grid gap-6">
-        {sprints.map((sprint) => {
-          const sprintTasks = getSprintTasks(sprint);
-          const progress = getSprintProgress(sprint);
-          const velocity = getSprintVelocity(sprint);
+      {/* Sprint Details Modal */}
+      {selectedSprint && (
+        <SprintDetailsModal
+          sprint={selectedSprint}
+          metrics={getSprintMetrics(selectedSprint)}
+          tasks={tasks.filter(t => selectedSprint.tasks.includes(t.id))}
+          onClose={() => setSelectedSprint(null)}
+        />
+      )}
+    </div>
+  )
+}
 
-          return (
-            <div
-              key={sprint.id}
-              className="bg-gray-900 border border-gray-800 rounded-lg p-6"
+// Sprint Card Component
+function SprintCard({ 
+  sprint, 
+  metrics, 
+  isActive = false, 
+  isCompleted = false,
+  onSelect 
+}: {
+  sprint: Sprint
+  metrics: any
+  isActive?: boolean
+  isCompleted?: boolean
+  onSelect: () => void
+}) {
+  return (
+    <div 
+      onClick={onSelect}
+      className={cn(
+        "bg-gray-900 border rounded-lg p-4 lg:p-6 cursor-pointer transition-all",
+        isActive && "border-green-500/50 shadow-lg shadow-green-500/10",
+        isCompleted && "opacity-75",
+        !isActive && !isCompleted && "border-gray-800 hover:border-gray-700"
+      )}
+    >
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+        <div className="flex-1">
+          <div className="flex items-start justify-between mb-2">
+            <h3 className="text-lg font-semibold text-white">{sprint.name}</h3>
+            <span className={cn(
+              "px-2 py-1 rounded-full text-xs font-medium",
+              isActive && "bg-green-500/20 text-green-400",
+              sprint.status === 'planning' && "bg-yellow-500/20 text-yellow-400",
+              isCompleted && "bg-gray-500/20 text-gray-400"
+            )}>
+              {sprint.status.charAt(0).toUpperCase() + sprint.status.slice(1)}
+            </span>
+          </div>
+          
+          <p className="text-gray-400 text-sm mb-3">{sprint.goal}</p>
+          
+          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+            <div className="flex items-center gap-1">
+              <Calendar size={14} />
+              <span>{format(sprint.startDate, 'MMM d')} - {format(sprint.endDate, 'MMM d')}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Target size={14} />
+              <span>{metrics.completedPoints}/{metrics.totalPoints} points</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Users size={14} />
+              <span>{metrics.totalTasks} tasks</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Progress Circle */}
+        <div className="flex items-center gap-4">
+          <div className="relative w-16 h-16">
+            <svg className="w-16 h-16 transform -rotate-90">
+              <circle
+                cx="32"
+                cy="32"
+                r="24"
+                stroke="#374151"
+                strokeWidth="8"
+                fill="none"
+              />
+              <circle
+                cx="32"
+                cy="32"
+                r="24"
+                stroke={isActive ? '#10b981' : '#6b7280'}
+                strokeWidth="8"
+                fill="none"
+                strokeDasharray={`${(metrics.progress / 100) * 150.8} 150.8`}
+              />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-sm font-bold text-white">{metrics.progress}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Stats */}
+      {isActive && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+          <div className="bg-gray-800 rounded-lg p-3 text-center">
+            <div className="text-lg font-bold text-white">{metrics.daysRemaining}</div>
+            <div className="text-xs text-gray-400">Days Left</div>
+          </div>
+          <div className="bg-gray-800 rounded-lg p-3 text-center">
+            <div className="text-lg font-bold text-green-400">{metrics.completed}</div>
+            <div className="text-xs text-gray-400">Completed</div>
+          </div>
+          <div className="bg-gray-800 rounded-lg p-3 text-center">
+            <div className="text-lg font-bold text-yellow-400">{metrics.inProgress}</div>
+            <div className="text-xs text-gray-400">In Progress</div>
+          </div>
+          <div className="bg-gray-800 rounded-lg p-3 text-center">
+            <div className="text-lg font-bold text-blue-400">{metrics.velocity}</div>
+            <div className="text-xs text-gray-400">Velocity</div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Sprint Details Modal
+function SprintDetailsModal({ sprint, metrics, tasks, onClose }: any) {
+  const [activeTab, setActiveTab] = useState('overview')
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-gray-900 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden">
+        {/* Header */}
+        <div className="bg-gray-800 p-4 lg:p-6 border-b border-gray-700">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-xl lg:text-2xl font-bold text-white">{sprint.name}</h2>
+              <p className="text-gray-400 mt-1">{sprint.goal}</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-white"
             >
-              {/* Title & status */}
-              <div className="mb-4">
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <h2 className="text-xl font-semibold text-white mb-1">
-                      {sprint.name}
-                    </h2>
-                    <p className="text-gray-400">{sprint.goal}</p>
-                  </div>
-                  <span
-                    className={cn(
-                      'px-3 py-1 rounded-full text-xs font-medium',
-                      sprint.status === 'active' &&
-                        'bg-green-500/20 text-green-400',
-                      sprint.status === 'planning' &&
-                        'bg-yellow-500/20 text-yellow-400',
-                      sprint.status === 'completed' &&
-                        'bg-gray-500/20 text-gray-400'
-                    )}
-                  >
-                    {sprint.status.charAt(0).toUpperCase() +
-                      sprint.status.slice(1)}
-                  </span>
-                </div>
+              <X size={24} />
+            </button>
+          </div>
 
-                {/* Meta info */}
-                <div className="flex items-center gap-6 text-sm text-gray-400">
-                  <div className="flex items-center gap-2">
-                    <Calendar size={16} />
-                    <span>
-                      {format(sprint.startDate, 'MMM d')} –{' '}
-                      {format(sprint.endDate, 'MMM d, yyyy')}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Target size={16} />
-                    <span>{velocity} points completed</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Users size={16} />
-                    <span>{sprintTasks.length} tasks</span>
-                  </div>
-                </div>
-              </div>
+          {/* Tabs */}
+          <div className="flex gap-4 mt-4 overflow-x-auto">
+            {['overview', 'tasks', 'burndown', 'team'].map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={cn(
+                  "px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap",
+                  activeTab === tab
+                    ? "bg-primary text-white"
+                    : "text-gray-400 hover:text-white"
+                )}
+              >
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
 
-              {/* Progress bar */}
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-400">
-                    Sprint Progress
-                  </span>
-                  <span className="text-sm font-medium text-white">
-                    {progress}%
-                  </span>
+        {/* Content */}
+        <div className="p-4 lg:p-6 overflow-y-auto max-h-[60vh]">
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              {/* Sprint Info */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-gray-400 mb-2">Duration</h4>
+                  <p className="text-white">
+                    {format(sprint.startDate, 'MMM d')} - {format(sprint.endDate, 'MMM d, yyyy')}
+                  </p>
+                  <p className="text-sm text-gray-400 mt-1">
+                    {metrics.totalDays} days • {metrics.daysRemaining} remaining
+                  </p>
                 </div>
-                <div className="w-full bg-gray-800 rounded-full h-2">
-                  <div
-                    className="bg-primary rounded-full h-2 transition-all"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Task summary */}
-              <div className="grid grid-cols-4 gap-4 text-center">
-                {([
-                  ['todo', 'To Do'],
-                  ['inProgress', 'In Progress'],
-                  ['review', 'In Review'],
-                  ['done', 'Done'],
-                ] as const).map(([statusKey, label]) => (
-                  <div
-                    key={statusKey}
-                    className="bg-gray-800 rounded-lg p-3"
-                  >
-                    <div className="text-2xl font-bold text-white">
-                      {
-                        sprintTasks.filter(
-                          (t) => t.status === statusKey
-                        ).length
-                      }
+                
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-gray-400 mb-2">Progress</h4>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-gray-700 rounded-full h-2">
+                      <div
+                        className="bg-primary rounded-full h-2 transition-all"
+                        style={{ width: `${metrics.progress}%` }}
+                      />
                     </div>
-                    <div className="text-xs text-gray-400">{label}</div>
+                    <span className="text-white font-medium">{metrics.progress}%</span>
                   </div>
-                ))}
+                </div>
+                
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-gray-400 mb-2">Velocity</h4>
+                  <p className="text-2xl font-bold text-white">
+                    {metrics.velocity} <span className="text-sm font-normal text-gray-400">points</span>
+                  </p>
+                </div>
               </div>
 
-              {/* Actions */}
-              <div className="mt-4 flex gap-2">
-                <Button variant="secondary">
-                  View Sprint Board
-                </Button>
-                <Button variant="secondary">
-                  Sprint Report
-                </Button>
+              {/* Task Breakdown */}
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-gray-400 mb-4">Task Breakdown</h4>
+                <div className="space-y-2">
+                  {['todo', 'inProgress', 'review', 'done'].map(status => {
+                    const count = tasks.filter((t: any) => t.status === status).length
+                    const percentage = tasks.length > 0 ? (count / tasks.length) * 100 : 0
+                    
+                    return (
+                      <div key={status} className="flex items-center gap-3">
+                        <span className="text-sm text-gray-400 w-24">
+                          {status === 'inProgress' ? 'In Progress' : status.charAt(0).toUpperCase() + status.slice(1)}
+                        </span>
+                        <div className="flex-1 bg-gray-700 rounded-full h-2">
+                          <div
+                            className={cn(
+                              "rounded-full h-2 transition-all",
+                              status === 'todo' && "bg-gray-500",
+                              status === 'inProgress' && "bg-yellow-500",
+                              status === 'review' && "bg-blue-500",
+                              status === 'done' && "bg-green-500"
+                            )}
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                        <span className="text-sm text-white w-12 text-right">{count}</span>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             </div>
-          );
-        })}
+          )}
+
+          {activeTab === 'burndown' && (
+            <div className="bg-gray-800 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-gray-400 mb-4">Sprint Burndown</h4>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={metrics.burndownData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <XAxis dataKey="day" stroke="#9CA3AF" />
+                    <YAxis stroke="#9CA3AF" />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151' }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="ideal"
+                      stroke="#9CA3AF"
+                      strokeDasharray="5 5"
+                      name="Ideal"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="actual"
+                      stroke="#10B981"
+                      strokeWidth={2}
+                      name="Actual"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* Add other tab content as needed */}
+        </div>
       </div>
     </div>
-  );
+  )
 }
