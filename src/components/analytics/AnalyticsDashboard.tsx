@@ -21,9 +21,9 @@ import { useTasks } from '@/hooks/useTaskStore'
 import { format, subDays, eachDayOfInterval } from 'date-fns'
 
 export function AnalyticsDashboard() {
-  const tasks = useTasks() || []
+  const allTasks = useTasks() || []
 
-  const tasksMemo = useMemo(() => tasks, [tasks])
+  const tasksMemo = useMemo(() => allTasks, [allTasks])
 
   const statusData = useMemo(() => {
     const counts = tasksMemo.reduce((acc, task) => {

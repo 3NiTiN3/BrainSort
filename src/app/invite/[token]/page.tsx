@@ -28,7 +28,7 @@ export default function InvitePage({ params }: { params: { token: string } }) {
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
       <div className="bg-gray-900 rounded-lg border border-gray-800 p-8 max-w-md w-full">
         <h1 className="text-2xl font-bold text-white mb-4">
-          You've been invited to join a workspace
+          You&apos;ve been invited to join a workspace
         </h1>
         
         {error && (

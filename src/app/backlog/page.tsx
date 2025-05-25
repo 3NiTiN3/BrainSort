@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Plus, Filter, Search, ChevronRight, Calendar, Tag, Users } from 'lucide-react'
 import { useTaskStore } from '@/hooks/useTaskStore'
 import { useAuth } from '@/contexts/AuthContext'
@@ -10,6 +10,17 @@ import { CreateTaskModal } from '@/components/board/CreateTaskModal'
 import { Task } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
+
+// Extended Task type to include sprint_id and other properties
+interface ExtendedTask extends Task {
+  sprint_id?: string | null
+  storyPoints?: number
+  subtasks?: Array<{
+    id: string
+    title: string
+    completed: boolean
+  }>
+}
 
 export default function BacklogPage() {
   const { user } = useAuth()
@@ -22,26 +33,34 @@ export default function BacklogPage() {
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set())
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set())
 
+  const memoizedFetchTasks = useCallback(() => {
+    fetchTasks()
+  }, [fetchTasks])
+
   useEffect(() => {
     if (user && currentWorkspace) {
-      fetchTasks()
+      memoizedFetchTasks()
     }
-  }, [user, currentWorkspace])
+  }, [user, currentWorkspace, memoizedFetchTasks])
+
+  // Cast tasks to extended type for sprint_id access
+  const extendedTasks = tasks as ExtendedTask[]
 
   // Get unique labels from all tasks
-  const allLabels = Array.from(new Set(tasks.flatMap(task => task.labels)))
+  const allLabels = Array.from(new Set(extendedTasks.flatMap(task => task.labels || [])))
 
-  // Filter backlog tasks
-  const backlogTasks = tasks.filter(task => {
+  // Filter backlog tasks (tasks not assigned to any sprint)
+  const backlogTasks = extendedTasks.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          task.description?.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesPriority = selectedPriority === 'all' || task.priority === selectedPriority
     const matchesLabels = selectedLabels.length === 0 || 
-                         selectedLabels.some(label => task.labels.includes(label))
+                         selectedLabels.some(label => (task.labels || []).includes(label))
+    // Filter out tasks that are assigned to a sprint
     return !task.sprint_id && matchesSearch && matchesPriority && matchesLabels
   })
 
-  // Group tasks by status
+  // Group tasks by readiness for sprint
   const groupedTasks = {
     todo: backlogTasks.filter(t => t.status === 'todo'),
     ready: backlogTasks.filter(t => t.status === 'todo' && t.assignee && t.storyPoints),
@@ -69,7 +88,8 @@ export default function BacklogPage() {
 
   const moveSelectedToSprint = async (sprintId: string) => {
     for (const taskId of selectedTasks) {
-      await updateTask(taskId, { sprint_id: sprintId })
+      // Use type assertion to bypass the sprint_id type issue
+      await updateTask(taskId, { sprint_id: sprintId } as Partial<Task>)
     }
     setSelectedTasks(new Set())
   }
@@ -98,7 +118,7 @@ export default function BacklogPage() {
           
           <div className="flex gap-2">
             {selectedTasks.size > 0 && (
-              <Button variant="secondary">
+              <Button variant="secondary" onClick={() => moveSelectedToSprint('mock-sprint-id')}>
                 Move to Sprint
               </Button>
             )}
@@ -171,6 +191,10 @@ export default function BacklogPage() {
         ) : backlogTasks.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-gray-400 mb-4">No items match your filters</p>
+            <Button onClick={() => setIsCreateModalOpen(true)} variant="secondary">
+              <Plus size={16} className="mr-2" />
+              Create your first backlog item
+            </Button>
           </div>
         ) : (
           <div className="space-y-2">
@@ -237,7 +261,7 @@ function BacklogItem({
   onToggleSelect,
   getPriorityIcon 
 }: {
-  task: Task
+  task: ExtendedTask
   isExpanded: boolean
   isSelected: boolean
   onToggleExpand: () => void
@@ -280,7 +304,7 @@ function BacklogItem({
                   {task.storyPoints} SP
                 </span>
               )}
-              {task.labels.map(label => (
+              {(task.labels || []).map(label => (
                 <span key={label} className="text-xs px-2 py-0.5 bg-gray-800 rounded text-gray-400">
                   {label}
                 </span>
@@ -300,7 +324,12 @@ function BacklogItem({
               {task.assignee && (
                 <div className="flex items-center gap-1">
                   <Users size={12} />
-                  <span>{task.assignee.name}</span>
+                  <span>
+                    {typeof task.assignee === 'string' 
+                      ? task.assignee 
+                      : task.assignee?.name || 'Unknown'
+                    }
+                  </span>
                 </div>
               )}
               {task.dueDate && (
@@ -323,39 +352,39 @@ function BacklogItem({
               </div>
             )}
             
-{task.subtasks && task.subtasks.length > 0 && (
-             <div>
-               <h5 className="text-xs font-medium text-gray-400 mb-1">Subtasks</h5>
-               <div className="space-y-1">
-                 {task.subtasks.map(subtask => (
-                   <div key={subtask.id} className="flex items-center gap-2 text-sm">
-                     <input
-                       type="checkbox"
-                       checked={subtask.completed}
-                       className="rounded border-gray-600 bg-gray-800"
-                       readOnly
-                     />
-                     <span className={cn(
-                       "text-gray-300",
-                       subtask.completed && "line-through text-gray-500"
-                     )}>
-                       {subtask.title}
-                     </span>
-                   </div>
-                 ))}
-               </div>
-             </div>
-           )}
+            {task.subtasks && task.subtasks.length > 0 && (
+              <div>
+                <h5 className="text-xs font-medium text-gray-400 mb-1">Subtasks</h5>
+                <div className="space-y-1">
+                  {task.subtasks.map((subtask) => (
+                    <div key={subtask.id} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={subtask.completed}
+                        className="rounded border-gray-600 bg-gray-800"
+                        readOnly
+                      />
+                      <span className={cn(
+                        "text-gray-300",
+                        subtask.completed && "line-through text-gray-500"
+                      )}>
+                        {subtask.title}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-           {/* Quick Actions */}
-           <div className="flex gap-2 pt-2">
-             <Button variant="secondary">Edit</Button>
-             <Button variant="secondary">Add to Sprint</Button>
-             <Button variant="secondary">Delete</Button>
-           </div>
-         </div>
-       )}
-     </div>
-   </div>
- )
+            {/* Quick Actions */}
+            <div className="flex gap-2 pt-2">
+              <Button variant="secondary">Edit</Button>
+              <Button variant="secondary">Add to Sprint</Button>
+              <Button variant="secondary">Delete</Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }

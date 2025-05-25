@@ -6,6 +6,7 @@ import { useDropzone } from 'react-dropzone'
 import { File, Image, Video, FileText, Download, X, Upload } from 'lucide-react'
 import { formatBytes } from '@/lib/utils'
 import { Attachment } from '@/lib/types'
+import NextImage from 'next/image'
 
 interface AttachmentsSectionProps {
   attachments: Attachment[]
@@ -37,9 +38,11 @@ export function AttachmentsSection({
   const getFilePreview = (attachment: Attachment) => {
     if (attachment.type.startsWith('image/')) {
       return (
-        <img
+        <NextImage
           src={attachment.url}
-          alt={attachment.name}
+          alt={attachment.name ? `Attachment: ${attachment.name}` : 'File attachment'}
+          width={300}
+          height={128}
           className="w-full h-32 object-cover rounded"
         />
       )

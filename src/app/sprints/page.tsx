@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Plus, Calendar, Users, Target, Play, CheckCircle, Clock, TrendingUp } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Plus, Calendar, Users, Target, Play, CheckCircle, Clock, TrendingUp, X } from 'lucide-react'
 import { useTaskStore } from '@/hooks/useTaskStore'
 import { useAuth } from '@/contexts/AuthContext'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
@@ -49,11 +49,15 @@ export default function SprintsPage() {
     }
   ])
 
+  const memoizedFetchTasks = useCallback(() => {
+    fetchTasks()
+  }, [fetchTasks])
+
   useEffect(() => {
     if (user && currentWorkspace) {
-      fetchTasks()
+      memoizedFetchTasks()
     }
-  }, [user, currentWorkspace])
+  }, [user, currentWorkspace, memoizedFetchTasks])
 
   const activeSprint = sprints.find(s => s.status === 'active')
   const planningSprints = sprints.filter(s => s.status === 'planning')
@@ -111,11 +115,11 @@ export default function SprintsPage() {
           <div>
             <h1 className="text-2xl lg:text-3xl font-bold text-white">Sprints</h1>
             <p className="text-gray-400 text-sm lg:text-base">
-              Manage your team's iterations
+              Manage your team&apos;s iterations
             </p>
           </div>
           
-          <Button onClick={() => setShowCreateModal(true)} size="sm">
+          <Button onClick={() => setShowCreateModal(true)}>
             <Plus size={16} />
             <span className="hidden sm:inline">Create Sprint</span>
           </Button>
@@ -416,6 +420,44 @@ function SprintDetailsModal({ sprint, metrics, tasks, onClose }: any) {
             </div>
           )}
 
+          {activeTab === 'tasks' && (
+            <div className="space-y-4">
+              <h4 className="text-lg font-semibold text-white">Sprint Tasks</h4>
+              {tasks.length === 0 ? (
+                <p className="text-gray-400">No tasks in this sprint</p>
+              ) : (
+                <div className="space-y-2">
+                  {tasks.map((task: any) => (
+                    <div key={task.id} className="bg-gray-800 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h5 className="text-white font-medium">{task.title}</h5>
+                          <p className="text-gray-400 text-sm">{task.description}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "px-2 py-1 rounded text-xs font-medium",
+                            task.status === 'todo' && "bg-gray-500/20 text-gray-400",
+                            task.status === 'inProgress' && "bg-yellow-500/20 text-yellow-400",
+                            task.status === 'review' && "bg-blue-500/20 text-blue-400",
+                            task.status === 'done' && "bg-green-500/20 text-green-400"
+                          )}>
+                            {task.status === 'inProgress' ? 'In Progress' : task.status.charAt(0).toUpperCase() + task.status.slice(1)}
+                          </span>
+                          {task.storyPoints && (
+                            <span className="text-xs px-2 py-1 bg-gray-700 rounded">
+                              {task.storyPoints} SP
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'burndown' && (
             <div className="bg-gray-800 rounded-lg p-4">
               <h4 className="text-sm font-medium text-gray-400 mb-4">Sprint Burndown</h4>
@@ -448,7 +490,58 @@ function SprintDetailsModal({ sprint, metrics, tasks, onClose }: any) {
             </div>
           )}
 
-          {/* Add other tab content as needed */}
+          {activeTab === 'team' && (
+            <div className="space-y-4">
+              <h4 className="text-lg font-semibold text-white">Team Performance</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <h5 className="text-sm font-medium text-gray-400 mb-3">Task Distribution</h5>
+                  <div className="space-y-2">
+                    {/* Mock team member data */}
+                    {[
+                      { name: 'John Doe', tasks: 5, completed: 3 },
+                      { name: 'Jane Smith', tasks: 4, completed: 4 },
+                      { name: 'Bob Johnson', tasks: 3, completed: 1 },
+                    ].map((member) => (
+                      <div key={member.name} className="flex items-center justify-between">
+                        <span className="text-white text-sm">{member.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400">{member.completed}/{member.tasks}</span>
+                          <div className="w-16 bg-gray-700 rounded-full h-2">
+                            <div
+                              className="bg-primary rounded-full h-2 transition-all"
+                              style={{ width: `${(member.completed / member.tasks) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="bg-gray-800 rounded-lg p-4">
+                  <h5 className="text-sm font-medium text-gray-400 mb-3">Sprint Capacity</h5>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-white text-sm">Total Capacity</span>
+                      <span className="text-white font-medium">40 hours</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-white text-sm">Hours Logged</span>
+                      <span className="text-white font-medium">32 hours</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-white text-sm">Utilization</span>
+                      <span className="text-green-400 font-medium">80%</span>
+                    </div>
+                    <div className="w-full bg-gray-700 rounded-full h-2 mt-2">
+                      <div className="bg-green-400 rounded-full h-2 transition-all" style={{ width: '80%' }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
