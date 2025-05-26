@@ -96,29 +96,61 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
-      // Since workspace tables don't exist in the current schema, use mock data
-      console.log('Using mock workspace data as database tables are not available')
-      const mockWorkspaces: Workspace[] = [
-        {
-          id: 'mock-workspace-1',
-          name: 'My Workspace',
-          slug: 'my-workspace',
-          description: 'Default workspace for development',
-          created_by: user.id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+      // Try to fetch workspaces - if tables don't exit handle gracefully
+      try {
+        const { data, error } = await supabase
+          .from('workspaces')
+          .select(`
+            *,
+            workspace_members!inner(role, user_id)
+          `)
+          .eq('workspace_members.user_id', user.id)
+
+        if (error) {
+          // If tables don't exist, create mock data for development
+          console.warn('Workspace tables not found, using mock data:', error.message)
+          const mockWorkspaces: Workspace[] = [
+            {
+              id: 'mock-workspace-1',
+              name: 'My Workspace',
+              slug: 'my-workspace',
+              description: 'Default workspace for development',
+              created_by: user.id,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            }
+          ]
+          setWorkspaces(mockWorkspaces)
+          setCurrentWorkspace(mockWorkspaces[0])
+          return
         }
-      ]
-      
-      setWorkspaces(mockWorkspaces)
-      
-      // Set current workspace from localStorage or first workspace
-      const savedWorkspaceId = typeof window !== 'undefined' ? localStorage.getItem('currentWorkspaceId') : null
-      const savedWorkspace = mockWorkspaces.find(w => w.id === savedWorkspaceId)
-      
-      if (savedWorkspace) {
-        setCurrentWorkspace(savedWorkspace)
-      } else {
+
+        setWorkspaces(data || [])
+        
+        // Set current workspace from localStorage or first workspace
+        const savedWorkspaceId = typeof window !== 'undefined' ? localStorage.getItem('currentWorkspaceId') : null
+        const savedWorkspace = data?.find(w => w.id === savedWorkspaceId)
+        
+        if (savedWorkspace) {
+          setCurrentWorkspace(savedWorkspace)
+        } else if (data && data.length > 0) {
+          setCurrentWorkspace(data[0])
+        }
+      } catch (dbError: any) {
+        console.warn('Database error, using mock workspace:', dbError.message)
+        // Fallback to mock data if database tables don't exist
+        const mockWorkspaces: Workspace[] = [
+          {
+            id: 'mock-workspace-1',
+            name: 'My Workspace',
+            slug: 'my-workspace',
+            description: 'Default workspace for development',
+            created_by: user.id,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+        ]
+        setWorkspaces(mockWorkspaces)
         setCurrentWorkspace(mockWorkspaces[0])
       }
     } catch (error: any) {
@@ -133,30 +165,25 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     if (!currentWorkspace) return
 
     try {
-      // Since workspace_members table doesn't exist, use mock data
-      console.log('Using mock member data as database tables are not available')
-      const mockMembers: WorkspaceMember[] = [
-        {
-          id: 'mock-member-1',
-          workspace_id: currentWorkspace.id,
-          user_id: 'mock-user-1',
-          role: 'admin',
-          joined_at: new Date().toISOString(),
-          user: {
-            id: 'mock-user-1',
-            name: 'Current User',
-            email: 'user@example.com',
-            avatar_url: undefined
-          }
-        }
-      ]
+      const { data, error } = await supabase
+        .from('workspace_members')
+        .select(`
+          *,
+          user:user_id(id, name, email, avatar_url)
+        `)
+        .eq('workspace_id', currentWorkspace.id)
+
+      if (error) {
+        console.warn('Could not fetch workspace members:', error.message)
+        return
+      }
       
-      setMembers(mockMembers)
+      setMembers(data || [])
     } catch (error: any) {
       console.warn('Error fetching members:', error.message)
       setError(error.message)
     }
-  }, [currentWorkspace])
+  }, [currentWorkspace, supabase])
 
   useEffect(() => {
     fetchWorkspaces()
@@ -177,22 +204,23 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      // Since workspace table doesn't exist, simulate creation
-      const newWorkspace: Workspace = {
-        id: crypto.randomUUID(),
-        name,
-        slug: name.toLowerCase().replace(/\s+/g, '-'),
-        description,
-        created_by: user.id,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
+      const slug = name.toLowerCase().replace(/\s+/g, '-')
 
-      // Add to existing workspaces
-      setWorkspaces(prev => [...prev, newWorkspace])
-      setCurrentWorkspace(newWorkspace)
-      
-      console.log('Mock workspace created:', newWorkspace)
+      const { data, error } = await supabase
+        .from('workspaces')
+        .insert({
+          name,
+          slug,
+          description,
+          created_by: user.id,
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      await fetchWorkspaces()
+      setCurrentWorkspace(data)
       router.push('/')
     } catch (error: any) {
       setError(error.message)
@@ -208,15 +236,21 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       if (!user) throw new Error('Not authenticated')
 
       const token = crypto.randomUUID()
-      
-      // Since workspace_invitations table doesn't exist, simulate the invitation
-      console.log('Mock invitation created:', {
-        workspace: currentWorkspace.name,
-        email,
-        role,
-        token,
-        invitedBy: user.email
-      })
+      const expiresAt = new Date()
+      expiresAt.setDate(expiresAt.getDate() + 7) // 7 days expiry
+
+      const { error } = await supabase
+        .from('workspace_invitations')
+        .insert({
+          workspace_id: currentWorkspace.id,
+          email,
+          role,
+          token,
+          invited_by: user.id,
+          expires_at: expiresAt.toISOString(),
+        })
+
+      if (error) throw error
 
       // Send invitation email (you'll need to set up email sending)
       if (typeof window !== 'undefined') {
@@ -233,10 +267,37 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      // Since workspace_invitations table doesn't exist, simulate acceptance
-      console.log('Mock invitation accepted:', { token, user: user.email })
-      
-      // Simulate adding user to workspace
+      // Get invitation
+      const { data: invitation, error: inviteError } = await supabase
+        .from('workspace_invitations')
+        .select('*, workspace:workspace_id(*)')
+        .eq('token', token)
+        .single()
+
+      if (inviteError) throw inviteError
+      if (!invitation) throw new Error('Invalid invitation')
+      if (invitation.accepted) throw new Error('Invitation already used')
+      if (new Date(invitation.expires_at) < new Date()) throw new Error('Invitation expired')
+
+      // Add user to workspace
+      const { error: memberError } = await supabase
+        .from('workspace_members')
+        .insert({
+          workspace_id: invitation.workspace_id,
+          user_id: user.id,
+          role: invitation.role,
+        })
+
+      if (memberError) throw memberError
+
+      // Mark invitation as accepted
+      const { error: updateError } = await supabase
+        .from('workspace_invitations')
+        .update({ accepted: true })
+        .eq('id', invitation.id)
+
+      if (updateError) throw updateError
+
       await fetchWorkspaces()
       router.push('/')
     } catch (error: any) {
